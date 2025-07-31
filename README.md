@@ -46,6 +46,21 @@ flowchart TD
 
 ---
 
+## Project Structure
+
+```
+market-sentiment-analyzer/
+├── dashboard.py              # Streamlit dashboard frontend
+├── stream_sentiment.py       # Backend data collection and sentiment analysis
+├── utils.py                  # Utility functions and helpers
+├── config.py                 # Configuration settings
+├── run.py                    # Startup script for easy execution
+├── requirements.txt          # Python dependencies
+├── env_template.txt          # Environment variables template
+├── README.md                # This file
+└── .gitignore               # Git ignore file
+```
+
 ## Getting Started
 
 Follow these steps to set up and run the project locally.
@@ -71,17 +86,30 @@ Create a `.env` file in the project root and add your credentials:
 NEWS_API_KEY=your_newsapi_key
 ```
 
-### 4. Start Data Collection
-Run the script to collect Reddit posts and news headlines, classify them, and store results:
+### 4. Quick Start
+Use the provided startup script to run the application:
 
+```bash
+# Run dashboard only (with sample data)
+python run.py dashboard
+
+# Run data collection stream only
+python run.py stream
+
+# Run both dashboard and data stream
+python run.py both
 ```
+
+### 5. Manual Start (Alternative)
+If you prefer to run components manually:
+
+**Start Data Collection:**
+```bash
 python stream_sentiment.py
 ```
 
-### 5. Launch the Dashboard
-Start the dashboard to visualize live sentiment vs. price trends:
-
-```
+**Launch Dashboard:**
+```bash
 streamlit run dashboard.py
 ```
 

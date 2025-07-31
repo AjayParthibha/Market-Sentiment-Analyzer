@@ -1,0 +1,42 @@
+# Stock Sentiment Analytics - Environment Configuration
+# Copy this file to .env and fill in your actual values
+
+# API Keys
+NEWS_API_KEY=your_newsapi_key_here
+REDDIT_CLIENT_ID=your_reddit_client_id_here
+REDDIT_CLIENT_SECRET=your_reddit_client_secret_here
+REDDIT_USER_AGENT=StockSentimentBot/1.0
+
+# Database Configuration
+DATABASE_PATH=sentiment_data.db
+
+# Model Configuration
+MODEL_NAME=ProsusAI/finbert
+MAX_TEXT_LENGTH=512
+DEVICE=auto
+
+# Stream Configuration
+STREAM_INTERVAL=300
+REDDIT_LIMIT=100
+NEWS_LIMIT=50
+
+# Dashboard Configuration
+DASHBOARD_PORT=8501
+DASHBOARD_HOST=localhost
+
+# Logging Configuration
+LOG_LEVEL=INFO
+LOG_FILE=sentiment_analysis.log
+
+# Stock Data Configuration
+STOCK_UPDATE_INTERVAL=60
+YAHOO_FINANCE_TIMEOUT=10
+
+# Development Configuration
+DEBUG=False
+SAMPLE_DATA=True
+
+# File Paths
+DATA_DIR=data
+MODELS_DIR=models
+LOGS_DIR=logs 
