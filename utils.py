@@ -140,7 +140,7 @@ def aggregate_sentiment_by_ticker(df: pd.DataFrame) -> pd.DataFrame:
     
     return agg_data
 
-def get_database_connection(db_path: str = 'sentiment_data.db') -> sqlite3.Connection:
+def get_database_connection(db_path: str = 'data/sentiment_data.db') -> sqlite3.Connection:
     """
     Get a database connection.
     
@@ -152,7 +152,7 @@ def get_database_connection(db_path: str = 'sentiment_data.db') -> sqlite3.Conne
     """
     return sqlite3.connect(db_path)
 
-def load_sentiment_data(db_path: str = 'sentiment_data.db', 
+def load_sentiment_data(db_path: str = 'data/sentiment_data.db', 
                        ticker: Optional[str] = None,
                        hours: Optional[int] = None) -> pd.DataFrame:
     """
@@ -197,7 +197,7 @@ def load_sentiment_data(db_path: str = 'sentiment_data.db',
         logger.error(f"Error loading sentiment data: {e}")
         return pd.DataFrame()
 
-def load_stock_data(db_path: str = 'sentiment_data.db',
+def load_stock_data(db_path: str = 'data/sentiment_data.db',
                    ticker: Optional[str] = None,
                    hours: Optional[int] = None) -> pd.DataFrame:
     """

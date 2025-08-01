@@ -42,7 +42,7 @@ st.markdown("""
 
 def create_sample_data():
     """Create sample data for demonstration"""
-    dates = pd.date_range(start=datetime.now() - timedelta(days=7), end=datetime.now(), freq='H')
+    dates = pd.date_range(start=datetime.now() - timedelta(days=7), end=datetime.now(), freq='h')
     
     # Sample sentiment data
     sentiment_data = []
@@ -70,7 +70,7 @@ def load_data():
     """Load data from database or create sample data"""
     try:
         # Try to connect to database
-        conn = sqlite3.connect('sentiment_data.db')
+        conn = sqlite3.connect('data/sentiment_data.db')
         sentiment_df = pd.read_sql_query("SELECT * FROM sentiment_data", conn)
         conn.close()
         return sentiment_df

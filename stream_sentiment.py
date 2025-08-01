@@ -25,7 +25,7 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('sentiment_analysis.log'),
+        logging.FileHandler('logs/sentiment_analysis.log'),
         logging.StreamHandler()
     ]
 )
@@ -163,7 +163,7 @@ class DataCollector:
 class DatabaseManager:
     """Manage SQLite database operations"""
     
-    def __init__(self, db_path='sentiment_data.db'):
+    def __init__(self, db_path='data/sentiment_data.db'):
         self.db_path = db_path
         self._init_database()
     

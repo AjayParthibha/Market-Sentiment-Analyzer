@@ -8,7 +8,7 @@ REDDIT_CLIENT_SECRET=your_reddit_client_secret_here
 REDDIT_USER_AGENT=StockSentimentBot/1.0
 
 # Database Configuration
-DATABASE_PATH=sentiment_data.db
+DATABASE_PATH=data/sentiment_data.db
 
 # Model Configuration
 MODEL_NAME=ProsusAI/finbert
@@ -26,7 +26,7 @@ DASHBOARD_HOST=localhost
 
 # Logging Configuration
 LOG_LEVEL=INFO
-LOG_FILE=sentiment_analysis.log
+LOG_FILE=logs/sentiment_analysis.log
 
 # Stock Data Configuration
 STOCK_UPDATE_INTERVAL=60

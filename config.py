@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Database Configuration
-DATABASE_PATH = os.getenv('DATABASE_PATH', 'sentiment_data.db')
+DATABASE_PATH = os.getenv('DATABASE_PATH', 'data/sentiment_data.db')
 
 # API Configuration
 NEWS_API_KEY = os.getenv('NEWS_API_KEY')
@@ -40,7 +40,7 @@ NEWS_LIMIT = int(os.getenv('NEWS_LIMIT', '50'))
 
 # Logging Configuration
 LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
-LOG_FILE = os.getenv('LOG_FILE', 'sentiment_analysis.log')
+LOG_FILE = os.getenv('LOG_FILE', 'logs/sentiment_analysis.log')
 
 # Dashboard Configuration
 DASHBOARD_PORT = int(os.getenv('DASHBOARD_PORT', '8501'))

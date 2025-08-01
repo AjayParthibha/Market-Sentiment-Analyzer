@@ -14,13 +14,13 @@ def check_dependencies():
     """Check if required dependencies are installed"""
     required_packages = [
         'streamlit', 'pandas', 'plotly', 'transformers', 
-        'torch', 'yfinance', 'python-dotenv'
+        'torch', 'yfinance', 'dotenv'
     ]
     
     missing_packages = []
     for package in required_packages:
         try:
-            __import__(package.replace('-', '_'))
+            __import__(package)
         except ImportError:
             missing_packages.append(package)
     
