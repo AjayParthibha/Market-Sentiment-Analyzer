@@ -260,7 +260,6 @@ class StockDataCollector:
         """Get current stock data for a ticker"""
         try:
             stock = yf.Ticker(ticker)
-            info = stock.info
             hist = stock.history(period="1d")
             
             if not hist.empty:
@@ -370,6 +369,7 @@ class SentimentStreamProcessor:
             if stock_data:
                 self.db_manager.save_stock_data(ticker, stock_data)
                 logger.info(f"Collected stock data for {ticker}: ${stock_data['price']:.2f}")
+            time.sleep(3) # To avoid hitting API limits
     
     async def run_stream(self, interval=300):  # 5 minutes default
         """Run the sentiment analysis stream"""
