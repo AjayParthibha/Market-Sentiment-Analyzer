@@ -5,6 +5,7 @@ import plotly.express as px
 from datetime import datetime, timedelta
 import sqlite3
 import os
+import time
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -18,25 +19,49 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for better styling
+# Custom CSS for better styling with dark theme
 st.markdown("""
 <style>
     .main-header {
         font-size: 3rem;
         font-weight: bold;
-        color: #1f77b4;
+        color: #4da6ff;
         text-align: center;
         margin-bottom: 2rem;
     }
     .metric-card {
-        background-color: #f0f2f6;
+        background-color: #1e1e1e;
+        color: #e0e0e0;
         padding: 1rem;
         border-radius: 0.5rem;
-        border-left: 4px solid #1f77b4;
+        border-left: 4px solid #4da6ff;
+        margin-bottom: 1rem;
     }
-    .sentiment-positive { color: #28a745; }
-    .sentiment-negative { color: #dc3545; }
-    .sentiment-neutral { color: #6c757d; }
+    .metric-card strong {
+        color: #ffffff;
+    }
+    .metric-card small {
+        color: #b0b0b0;
+    }
+    .metric-card em {
+        color: #c0c0c0;
+    }
+    .sentiment-positive {
+        color: #4ade80;
+        font-weight: bold;
+    }
+    .sentiment-negative {
+        color: #f87171;
+        font-weight: bold;
+    }
+    .sentiment-neutral {
+        color: #a3a3a3;
+        font-weight: bold;
+    }
+    /* Ensure dark theme for plotly charts */
+    .js-plotly-plot {
+        background-color: #0e1117 !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -71,92 +96,140 @@ def load_data():
     try:
         # Try to connect to database
         conn = sqlite3.connect('data/sentiment_data.db')
-        sentiment_df = pd.read_sql_query("SELECT * FROM sentiment_data", conn)
+        sentiment_df = pd.read_sql_query(
+            "SELECT * FROM sentiment_data",
+            conn,
+            parse_dates=['timestamp']
+        )
         conn.close()
+
+        # Ensure timestamp is datetime type
+        if not pd.api.types.is_datetime64_any_dtype(sentiment_df['timestamp']):
+            sentiment_df['timestamp'] = pd.to_datetime(sentiment_df['timestamp'])
+
         return sentiment_df
-    except:
-        # Return sample data if database doesn't exist
+    except Exception as e:
+        # Return sample data if database doesn't exist or has errors
         return create_sample_data()
 
 def plot_sentiment_trends(df, ticker='AAPL'):
     """Plot sentiment trends over time"""
     ticker_data = df[df['ticker'] == ticker].copy()
     ticker_data = ticker_data.sort_values('timestamp')
-    
+
     fig = go.Figure()
-    
+
     # Sentiment score line
     fig.add_trace(go.Scatter(
         x=ticker_data['timestamp'],
         y=ticker_data['sentiment_score'],
         mode='lines+markers',
         name='Sentiment Score',
-        line=dict(color='#1f77b4', width=2),
+        line=dict(color='#4da6ff', width=2),
         marker=dict(size=6)
     ))
-    
+
     # Add sentiment labels as colors
     colors = []
     for label in ticker_data['sentiment_label']:
         if label == 'positive':
-            colors.append('#28a745')
+            colors.append('#4ade80')
         elif label == 'negative':
-            colors.append('#dc3545')
+            colors.append('#f87171')
         else:
-            colors.append('#6c757d')
-    
+            colors.append('#a3a3a3')
+
     fig.update_layout(
         title=f'Sentiment Trends for {ticker}',
         xaxis_title='Time',
         yaxis_title='Sentiment Score',
         height=400,
-        showlegend=True
+        showlegend=True,
+        template='plotly_dark',
+        paper_bgcolor='#0e1117',
+        plot_bgcolor='#0e1117',
+        font=dict(color='#e0e0e0')
     )
-    
+
     return fig
 
 def plot_sentiment_distribution(df):
     """Plot sentiment distribution by ticker"""
     sentiment_counts = df.groupby(['ticker', 'sentiment_label']).size().reset_index(name='count')
-    
+
     fig = px.bar(
         sentiment_counts,
         x='ticker',
         y='count',
         color='sentiment_label',
         color_discrete_map={
-            'positive': '#28a745',
-            'negative': '#dc3545',
-            'neutral': '#6c757d'
+            'positive': '#4ade80',
+            'negative': '#f87171',
+            'neutral': '#a3a3a3'
         },
         title='Sentiment Distribution by Ticker'
     )
-    
-    fig.update_layout(height=400)
+
+    fig.update_layout(
+        height=400,
+        template='plotly_dark',
+        paper_bgcolor='#0e1117',
+        plot_bgcolor='#0e1117',
+        font=dict(color='#e0e0e0')
+    )
     return fig
 
 def plot_source_distribution(df):
     """Plot data source distribution"""
     source_counts = df['source'].value_counts()
-    
+
     fig = px.pie(
         values=source_counts.values,
         names=source_counts.index,
         title='Data Sources Distribution'
     )
-    
-    fig.update_layout(height=400)
+
+    fig.update_layout(
+        height=400,
+        template='plotly_dark',
+        paper_bgcolor='#0e1117',
+        font=dict(color='#e0e0e0')
+    )
     return fig
 
 def main():
     # Header
     st.markdown('<h1 class="main-header">📈 Stock Sentiment Analytics</h1>', unsafe_allow_html=True)
-    
+
     # Load data
     df = load_data()
-    
+
     # Sidebar
     st.sidebar.header("📊 Dashboard Controls")
+
+    # Auto-refresh controls
+    st.sidebar.subheader("🔄 Auto-Refresh")
+    auto_refresh = st.sidebar.checkbox("Enable Auto-Refresh", value=False)
+
+    refresh_interval = 30
+    if auto_refresh:
+        refresh_interval = st.sidebar.slider(
+            "Refresh Interval (seconds)",
+            min_value=5,
+            max_value=300,
+            value=30,
+            step=5
+        )
+
+        # Show last update time
+        st.sidebar.info(f"🕒 Last updated: {datetime.now().strftime('%H:%M:%S')}")
+        st.sidebar.info(f"⏰ Auto-refreshing every {refresh_interval}s")
+
+    # Manual refresh button
+    if st.sidebar.button("🔄 Refresh Now"):
+        st.rerun()
+
+    st.sidebar.markdown("---")
     
     # Date range filter
     date_range = st.sidebar.date_input(
@@ -235,9 +308,11 @@ def main():
     if not recent_mentions.empty:
         for _, row in recent_mentions.iterrows():
             sentiment_class = f"sentiment-{row['sentiment_label']}"
+            # Format timestamp safely
+            timestamp_str = pd.to_datetime(row['timestamp']).strftime('%Y-%m-%d %H:%M')
             st.markdown(f"""
             <div class="metric-card">
-                <strong>{row['ticker']}</strong> - {row['timestamp'].strftime('%Y-%m-%d %H:%M')}
+                <strong>{row['ticker']}</strong> - {timestamp_str}
                 <br>
                 <span class="{sentiment_class}">Sentiment: {row['sentiment_label'].title()} ({row['sentiment_score']:.3f})</span>
                 <br>
@@ -259,6 +334,11 @@ def main():
         """,
         unsafe_allow_html=True
     )
+
+    # Trigger auto-refresh if enabled
+    if auto_refresh:
+        time.sleep(refresh_interval)
+        st.rerun()
 
 if __name__ == "__main__":
     main() 

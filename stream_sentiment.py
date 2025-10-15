@@ -252,42 +252,87 @@ class DatabaseManager:
 
 class StockDataCollector:
     """Collect real-time stock price data"""
-    
+
     def __init__(self):
         self.tickers = ['AAPL', 'TSLA', 'NVDA', 'MSFT', 'GOOGL', 'AMZN', 'META', 'NFLX']
-    
+        self.last_request_time = 0
+        self.min_request_interval = 10  # Minimum seconds between requests (increased)
+        self.failed_tickers = set()  # Track tickers that consistently fail
+        self.max_retries = 2
+
     def get_stock_data(self, ticker):
         """Get current stock data for a ticker"""
-        try:
-            stock = yf.Ticker(ticker)
-            hist = stock.history(period="1d")
-            
-            if not hist.empty:
-                current_price = hist['Close'].iloc[-1]
-                previous_price = hist['Open'].iloc[0]
-                change = current_price - previous_price
-                change_percent = (change / previous_price) * 100
-                
-                return {
-                    'price': current_price,
-                    'volume': hist['Volume'].iloc[-1],
-                    'change': change,
-                    'change_percent': change_percent
-                }
-        except Exception as e:
-            logger.error(f"Error getting stock data for {ticker}: {e}")
-        
+        # Skip tickers that have failed multiple times
+        if ticker in self.failed_tickers:
+            return None
+
+        for attempt in range(self.max_retries):
+            try:
+                # Rate limiting - ensure minimum interval between requests
+                current_time = time.time()
+                time_since_last = current_time - self.last_request_time
+                if time_since_last < self.min_request_interval:
+                    time.sleep(self.min_request_interval - time_since_last)
+
+                # Create ticker with session for better reliability
+                stock = yf.Ticker(ticker)
+
+                # Try different periods in order of preference
+                periods = ["1d", "5d", "1mo"]
+                hist = None
+
+                for period in periods:
+                    try:
+                        hist = stock.history(period=period)
+                        if not hist.empty:
+                            break
+                    except:
+                        continue
+
+                if hist is not None and not hist.empty and len(hist) >= 2:
+                    current_price = hist['Close'].iloc[-1]
+                    previous_price = hist['Close'].iloc[-2]
+                    change = current_price - previous_price
+                    change_percent = (change / previous_price) * 100
+
+                    self.last_request_time = time.time()
+
+                    logger.info(f"Successfully collected data for {ticker}: ${current_price:.2f}")
+
+                    return {
+                        'price': current_price,
+                        'volume': int(hist['Volume'].iloc[-1]),
+                        'change': change,
+                        'change_percent': change_percent
+                    }
+                elif attempt < self.max_retries - 1:
+                    # Wait before retry
+                    logger.debug(f"Retrying {ticker} (attempt {attempt + 2}/{self.max_retries})")
+                    time.sleep(3)
+                else:
+                    logger.warning(f"No historical data available for {ticker} after {self.max_retries} attempts")
+                    self.failed_tickers.add(ticker)
+
+            except Exception as e:
+                if attempt < self.max_retries - 1:
+                    logger.debug(f"Error getting stock data for {ticker}, retrying: {e}")
+                    time.sleep(3)
+                else:
+                    logger.warning(f"Failed to get stock data for {ticker} after {self.max_retries} attempts: {e}")
+                    self.failed_tickers.add(ticker)
+
         return None
 
 class SentimentStreamProcessor:
     """Main processor for streaming sentiment analysis"""
-    
-    def __init__(self):
+
+    def __init__(self, collect_stock_prices=True):
         self.sentiment_analyzer = SentimentAnalyzer()
         self.data_collector = DataCollector()
         self.db_manager = DatabaseManager()
-        self.stock_collector = StockDataCollector()
+        self.stock_collector = StockDataCollector() if collect_stock_prices else None
         self.running = False
+        self.collect_stock_prices = collect_stock_prices
     
     def extract_tickers(self, text):
         """Extract stock tickers from text"""
@@ -364,12 +409,23 @@ class SentimentStreamProcessor:
     
     async def collect_stock_data(self):
         """Collect current stock price data"""
+        if not self.collect_stock_prices or self.stock_collector is None:
+            logger.info("Stock price collection is disabled, skipping...")
+            return
+
+        logger.info("Starting stock price collection...")
+        success_count = 0
         for ticker in self.stock_collector.tickers:
             stock_data = self.stock_collector.get_stock_data(ticker)
             if stock_data:
                 self.db_manager.save_stock_data(ticker, stock_data)
-                logger.info(f"Collected stock data for {ticker}: ${stock_data['price']:.2f}")
-            time.sleep(3) # To avoid hitting API limits
+                success_count += 1
+            # Rate limiting is handled in StockDataCollector.get_stock_data()
+
+        if success_count > 0:
+            logger.info(f"Successfully collected stock data for {success_count}/{len(self.stock_collector.tickers)} tickers")
+        else:
+            logger.warning("Failed to collect stock data for all tickers. Yahoo Finance may be rate limiting.")
     
     async def run_stream(self, interval=300):  # 5 minutes default
         """Run the sentiment analysis stream"""
@@ -400,16 +456,25 @@ class SentimentStreamProcessor:
 
 async def main():
     """Main function to run the sentiment analysis stream"""
-    processor = SentimentStreamProcessor()
-    
+    # Check if stock price collection should be disabled
+    collect_stock_prices = os.getenv('COLLECT_STOCK_PRICES', 'true').lower() == 'true'
+
+    if not collect_stock_prices:
+        logger.info("Stock price collection is DISABLED via environment variable")
+
+    processor = SentimentStreamProcessor(collect_stock_prices=collect_stock_prices)
+
     # Run initial data collection
     logger.info("Running initial data collection...")
     await processor.process_reddit_data()
     await processor.process_news_data()
-    await processor.collect_stock_data()
-    
+
+    # Only collect stock data if enabled
+    if collect_stock_prices:
+        await processor.collect_stock_data()
+
     # Start the stream
-    await processor.run_stream()
+    await processor.run_stream(interval=int(os.getenv('STREAM_INTERVAL', '300')))
 
 if __name__ == "__main__":
     asyncio.run(main()) 
