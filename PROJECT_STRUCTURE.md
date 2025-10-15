@@ -55,16 +55,6 @@ market-sentiment-analyzer/
 ### **Virtual Environment**
 - **`venv/`** - Isolated Python environment with all dependencies installed
 
-## Key Features
-
-✅ **Organized File Structure** - Data, logs, and configs in proper directories  
-✅ **Virtual Environment** - Isolated dependencies and Python interpreter  
-✅ **IDE Integration** - Cursor/VS Code automatically uses the virtual environment  
-✅ **Easy Startup** - One command to run dashboard, stream, or both  
-✅ **Comprehensive Testing** - Test suite verifies all components work  
-✅ **Proper Logging** - Application logs stored in dedicated directory  
-✅ **Database Management** - SQLite database in data directory  
-
 ## Quick Start
 
 ```bash

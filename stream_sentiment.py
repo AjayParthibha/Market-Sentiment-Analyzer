@@ -15,6 +15,7 @@ from dotenv import load_dotenv
 from transformers import pipeline, AutoTokenizer, AutoModelForSequenceClassification
 import torch
 import time
+import praw
 import json
 
 # Load environment variables
@@ -56,7 +57,6 @@ class SentimentAnalyzer:
             logger.info("FinBERT model loaded successfully")
         except Exception as e:
             logger.error(f"Error loading FinBERT model: {e}")
-            # Fallback to a simpler model
             self.pipeline = pipeline("sentiment-analysis")
     
     def analyze_sentiment(self, text):
@@ -88,29 +88,92 @@ class SentimentAnalyzer:
 
 class DataCollector:
     """Collect data from various sources (Reddit, News APIs)"""
-    
+
     def __init__(self):
         self.reddit_client = None
         self.news_api_key = os.getenv('NEWS_API_KEY')
+        self.use_real_data = os.getenv('USE_REAL_DATA', 'false').lower() == 'true'
         self._setup_reddit()
-    
+
     def _setup_reddit(self):
-        """Setup Reddit client (placeholder for now)"""
+        """Setup Reddit client with PRAW"""
         try:
-            # This would be implemented with PRAW
-            # For now, we'll use sample data
-            logger.info("Reddit client setup (placeholder)")
+            if not self.use_real_data:
+                logger.info("Using sample Reddit data (set USE_REAL_DATA=true for real data)")
+                return
+
+            client_id = os.getenv('REDDIT_CLIENT_ID')
+            client_secret = os.getenv('REDDIT_CLIENT_SECRET')
+            user_agent = os.getenv('REDDIT_USER_AGENT', 'StockSentimentBot/1.0')
+
+            if not client_id or not client_secret:
+                logger.warning("Reddit credentials not found. Using sample data. Set REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET in .env")
+                self.use_real_data = False
+                return
+
+            self.reddit_client = praw.Reddit(
+                client_id=client_id,
+                client_secret=client_secret,
+                user_agent=user_agent
+            )
+            logger.info("Reddit client setup successful")
+        except ImportError:
+            logger.error("PRAW not installed. Using sample data. Install with: pip install praw")
+            self.use_real_data = False
         except Exception as e:
-            logger.error(f"Error setting up Reddit client: {e}")
+            logger.error(f"Error setting up Reddit client: {e}. Using sample data.")
+            self.use_real_data = False
     
     async def collect_reddit_data(self, subreddits=None, limit=100):
         """Collect posts from Reddit subreddits"""
         if subreddits is None:
             subreddits = ['wallstreetbets', 'investing', 'stocks']
-        
-        # Placeholder for Reddit data collection
-        # In a real implementation, this would use PRAW to collect posts
-        sample_posts = [
+
+        # Return sample data if not using real API
+        if not self.use_real_data or self.reddit_client is None:
+            return self._get_sample_reddit_posts()
+
+        # Collect real Reddit data
+        posts = []
+        try:
+            for subreddit_name in subreddits:
+                try:
+                    subreddit = self.reddit_client.subreddit(subreddit_name)
+                    # Get hot posts from each subreddit
+                    for submission in subreddit.hot(limit=limit // len(subreddits)):
+                        # Skip stickied posts and posts without content
+                        if submission.stickied or (not submission.selftext and not submission.title):
+                            continue
+
+                        posts.append({
+                            'title': submission.title,
+                            'text': submission.selftext if submission.selftext else submission.title,
+                            'score': submission.score,
+                            'created_utc': submission.created_utc,
+                            'subreddit': subreddit_name,
+                            'url': submission.url,
+                            'num_comments': submission.num_comments
+                        })
+
+                    logger.info(f"Collected {len([p for p in posts if p['subreddit'] == subreddit_name])} posts from r/{subreddit_name}")
+
+                except Exception as e:
+                    logger.error(f"Error collecting from r/{subreddit_name}: {e}")
+                    continue
+
+            if not posts:
+                logger.warning("No Reddit posts collected, using sample data")
+                return self._get_sample_reddit_posts()
+
+            return posts
+
+        except Exception as e:
+            logger.error(f"Error in Reddit data collection: {e}")
+            return self._get_sample_reddit_posts()
+
+    def _get_sample_reddit_posts(self):
+        """Return sample Reddit posts for testing"""
+        return [
             {
                 'title': 'AAPL earnings beat expectations',
                 'text': 'Apple just reported amazing earnings! Stock is going to the moon!',
@@ -133,17 +196,84 @@ class DataCollector:
                 'subreddit': 'stocks'
             }
         ]
-        
-        return sample_posts
     
     async def collect_news_data(self, tickers=None, limit=50):
         """Collect news headlines from NewsAPI"""
         if tickers is None:
             tickers = ['AAPL', 'TSLA', 'NVDA', 'MSFT', 'GOOGL']
-        
-        # Placeholder for news data collection
-        # In a real implementation, this would use NewsAPI
-        sample_news = [
+
+        # Return sample data if not using real API
+        if not self.use_real_data or not self.news_api_key:
+            if not self.news_api_key:
+                logger.info("NewsAPI key not found. Using sample data. Set NEWS_API_KEY in .env")
+            return self._get_sample_news()
+
+        # Collect real news data from NewsAPI
+        news_items = []
+        try:
+            import requests
+
+            base_url = "https://newsapi.org/v2/everything"
+
+            for ticker in tickers[:5]:  # Limit to 5 tickers to avoid rate limits
+                try:
+                    # Search for news about each ticker
+                    params = {
+                        'q': f'{ticker} stock OR {ticker} shares',
+                        'apiKey': self.news_api_key,
+                        'language': 'en',
+                        'sortBy': 'publishedAt',
+                        'pageSize': min(limit // len(tickers), 20),  # Limit per ticker
+                        'from': (datetime.now() - timedelta(days=7)).isoformat()
+                    }
+
+                    response = requests.get(base_url, params=params, timeout=10)
+
+                    if response.status_code == 200:
+                        data = response.json()
+                        articles = data.get('articles', [])
+
+                        for article in articles:
+                            if article.get('title') and article.get('description'):
+                                news_items.append({
+                                    'title': article['title'],
+                                    'description': article['description'],
+                                    'publishedAt': article.get('publishedAt', datetime.now().isoformat()),
+                                    'source': article.get('source', {}).get('name', 'Unknown'),
+                                    'url': article.get('url', '')
+                                })
+
+                        logger.info(f"Collected {len(articles)} news articles for {ticker}")
+
+                    elif response.status_code == 426:
+                        logger.warning("NewsAPI requires HTTPS upgrade. Using sample data.")
+                        return self._get_sample_news()
+                    elif response.status_code == 429:
+                        logger.warning("NewsAPI rate limit reached. Using cached/sample data.")
+                        break
+                    else:
+                        logger.error(f"NewsAPI error {response.status_code}: {response.text}")
+
+                    # Rate limiting - NewsAPI free tier: 100 requests/day
+                    await asyncio.sleep(1)
+
+                except Exception as e:
+                    logger.error(f"Error collecting news for {ticker}: {e}")
+                    continue
+
+            if not news_items:
+                logger.warning("No news articles collected, using sample data")
+                return self._get_sample_news()
+
+            return news_items
+
+        except Exception as e:
+            logger.error(f"Error in news data collection: {e}")
+            return self._get_sample_news()
+
+    def _get_sample_news(self):
+        """Return sample news for testing"""
+        return [
             {
                 'title': 'Apple Reports Record Quarterly Revenue',
                 'description': 'Apple Inc. reported record quarterly revenue driven by strong iPhone sales',
@@ -157,8 +287,6 @@ class DataCollector:
                 'source': 'Bloomberg'
             }
         ]
-        
-        return sample_news
 
 class DatabaseManager:
     """Manage SQLite database operations"""
@@ -337,14 +465,49 @@ class SentimentStreamProcessor:
     def extract_tickers(self, text):
         """Extract stock tickers from text"""
         import re
-        # Simple regex to find stock tickers (1-5 capital letters)
+
+        # Common stock tickers to look for (most actively traded)
+        known_tickers = {
+            'AAPL', 'TSLA', 'NVDA', 'MSFT', 'GOOGL', 'GOOG', 'AMZN', 'META', 'NFLX', 'AMD',
+            'INTC', 'CSCO', 'ADBE', 'AVGO', 'TXN', 'QCOM', 'COST', 'CMCSA', 'PEP', 'TMUS',
+            'ABNB', 'PYPL', 'CHTR', 'INTU', 'ISRG', 'BKNG', 'REGN', 'GILD', 'ADP', 'VRTX',
+            'SBUX', 'MDLZ', 'LRCX', 'MU', 'MELI', 'ASML', 'AMAT', 'CSX', 'ADI', 'KLAC',
+            'SPY', 'QQQ', 'DIA', 'IWM', 'VOO', 'VTI', 'ARKK', 'GME', 'AMC', 'BB', 'NOK',
+            'PLTR', 'NIO', 'LCID', 'RIVN', 'F', 'GM', 'T', 'VZ', 'DIS', 'NFLX', 'WMT', 'TGT',
+            'BA', 'CAT', 'DE', 'JPM', 'BAC', 'WFC', 'GS', 'MS', 'C', 'BRK', 'V', 'MA',
+            'COIN', 'SQ', 'HOOD', 'SOFI', 'UPST', 'AFRM'
+        }
+
+        # Extended common words to filter out
+        common_words = {
+            'THE', 'AND', 'FOR', 'ARE', 'YOU', 'ALL', 'NEW', 'TOP', 'BEST', 'GOOD', 'BIG',
+            'BUT', 'NOT', 'CAN', 'WAS', 'WILL', 'HAS', 'HAVE', 'HAD', 'MORE', 'BEEN', 'BEEN',
+            'THAN', 'SOME', 'WHAT', 'WHEN', 'WHERE', 'WHO', 'WHICH', 'THERE', 'THEIR', 'THEY',
+            'THIS', 'THAT', 'THESE', 'THOSE', 'FROM', 'INTO', 'OUT', 'UP', 'DOWN', 'OVER',
+            'UNDER', 'AGAIN', 'FURTHER', 'THEN', 'ONCE', 'HERE', 'VERY', 'MUCH', 'MANY',
+            'ANY', 'BOTH', 'EACH', 'FEW', 'OTHER', 'SUCH', 'ONLY', 'OWN', 'SAME', 'SO',
+            'JUST', 'NOW', 'ALSO', 'WELL', 'EVEN', 'BACK', 'WAY', 'COULD', 'WOULD', 'SHOULD',
+            'MIGHT', 'MUST', 'MAY', 'NEED', 'MAKE', 'TAKE', 'SEE', 'GET', 'COME', 'GO',
+            'WANT', 'KNOW', 'THINK', 'LOOK', 'USE', 'FIND', 'GIVE', 'TELL', 'WORK', 'CALL'
+        }
+
+        # Find potential tickers (1-5 capital letters)
         ticker_pattern = r'\b[A-Z]{1,5}\b'
-        tickers = re.findall(ticker_pattern, text)
-        
-        # Filter out common words that aren't tickers
-        common_words = {'THE', 'AND', 'FOR', 'ARE', 'YOU', 'ALL', 'NEW', 'TOP', 'BEST', 'GOOD', 'BIG'}
-        tickers = [ticker for ticker in tickers if ticker not in common_words]
-        
+        potential_tickers = re.findall(ticker_pattern, text)
+
+        # Filter to only known tickers or very likely patterns
+        tickers = []
+        for ticker in potential_tickers:
+            # Include if it's in our known list
+            if ticker in known_tickers:
+                tickers.append(ticker)
+            # Or if it's mentioned with $ sign (e.g., $AAPL)
+            elif f'${ticker}' in text:
+                tickers.append(ticker)
+            # Skip if it's a common word
+            elif ticker in common_words:
+                continue
+
         return list(set(tickers))
     
     async def process_reddit_data(self):

@@ -94,7 +94,6 @@ def create_sample_data():
 def load_data():
     """Load data from database or create sample data"""
     try:
-        # Try to connect to database
         conn = sqlite3.connect('data/sentiment_data.db')
         sentiment_df = pd.read_sql_query(
             "SELECT * FROM sentiment_data",
@@ -103,13 +102,11 @@ def load_data():
         )
         conn.close()
 
-        # Ensure timestamp is datetime type
         if not pd.api.types.is_datetime64_any_dtype(sentiment_df['timestamp']):
             sentiment_df['timestamp'] = pd.to_datetime(sentiment_df['timestamp'])
 
         return sentiment_df
     except Exception as e:
-        # Return sample data if database doesn't exist or has errors
         return create_sample_data()
 
 def plot_sentiment_trends(df, ticker='AAPL'):
@@ -129,7 +126,6 @@ def plot_sentiment_trends(df, ticker='AAPL'):
         marker=dict(size=6)
     ))
 
-    # Add sentiment labels as colors
     colors = []
     for label in ticker_data['sentiment_label']:
         if label == 'positive':
@@ -198,16 +194,9 @@ def plot_source_distribution(df):
     return fig
 
 def main():
-    # Header
     st.markdown('<h1 class="main-header">📈 Stock Sentiment Analytics</h1>', unsafe_allow_html=True)
-
-    # Load data
     df = load_data()
-
-    # Sidebar
     st.sidebar.header("📊 Dashboard Controls")
-
-    # Auto-refresh controls
     st.sidebar.subheader("🔄 Auto-Refresh")
     auto_refresh = st.sidebar.checkbox("Enable Auto-Refresh", value=False)
 
@@ -225,20 +214,20 @@ def main():
         st.sidebar.info(f"🕒 Last updated: {datetime.now().strftime('%H:%M:%S')}")
         st.sidebar.info(f"⏰ Auto-refreshing every {refresh_interval}s")
 
-    # Manual refresh button
+    # Manual refresh
     if st.sidebar.button("🔄 Refresh Now"):
         st.rerun()
 
     st.sidebar.markdown("---")
     
-    # Date range filter
+    # Date range
     date_range = st.sidebar.date_input(
         "Select Date Range",
         value=(datetime.now() - timedelta(days=7), datetime.now()),
         max_value=datetime.now()
     )
     
-    # Ticker filter
+    # Ticker
     available_tickers = df['ticker'].unique()
     selected_ticker = st.sidebar.selectbox(
         "Select Ticker",
@@ -308,7 +297,6 @@ def main():
     if not recent_mentions.empty:
         for _, row in recent_mentions.iterrows():
             sentiment_class = f"sentiment-{row['sentiment_label']}"
-            # Format timestamp safely
             timestamp_str = pd.to_datetime(row['timestamp']).strftime('%Y-%m-%d %H:%M')
             st.markdown(f"""
             <div class="metric-card">
@@ -335,7 +323,6 @@ def main():
         unsafe_allow_html=True
     )
 
-    # Trigger auto-refresh if enabled
     if auto_refresh:
         time.sleep(refresh_interval)
         st.rerun()
